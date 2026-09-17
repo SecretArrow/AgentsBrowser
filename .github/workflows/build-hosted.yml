@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - "agent_browser/**"
+      - "app/**"
       - "*.gradle.kts"
       - "gradle.properties"
       - "settings.gradle.kts"
@@ -45,18 +46,37 @@ jobs:
       - name: Assemble all modules (release)
         run: gradle assembleRelease --parallel --build-cache --stacktrace
 
-      - name: Collect AAR artifacts
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Android SDK is preinstalled on ubuntu-latest; skip setup-android
+      # (fails on sdkmanager 16 'tools' package).
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Build APKs (ABI split + universal)
+        run: gradle :app:assembleRelease --parallel --build-cache --stacktrace
+
+      - name: Collect APK artifacts
         run: |
-          mkdir -p aars
-          find agent_browser -path "*/build/outputs/aar/*-release.aar" -exec cp {} aars/ \; || true
-          ls -la aars/
+          mkdir -p apks
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} apks/ \;
+          ls -la apks/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: agent-browser-aars
-          path: aars/*.aar
+          name: agent-browser-apks
+          path: apks/*.apk
           retention-days: 14
-          if-no-files-found: warn
+          if-no-files-found: error
 
   test:
     runs-on: ubuntu-latest

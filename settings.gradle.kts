@@ -16,7 +16,7 @@ rootProject.name = "AgentsBrowser"
 
 // Logical module names map onto the agent_browser/ directory tree so
 // dependencies read project(":core"), project(":ai"), etc.
-include(":core", ":ai", ":automation", ":security", ":memory", ":agent", ":scheduler", ":browser", ":ui")
+include(":core", ":ai", ":automation", ":security", ":memory", ":agent", ":scheduler", ":browser", ":ui", ":app")
 
 project(":core").projectDir = file("agent_browser/core")
 project(":ai").projectDir = file("agent_browser/ai")

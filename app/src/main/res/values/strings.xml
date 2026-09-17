@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ua_button">UA</string>
+    <string name="control_center_button">Center</string>
+    <string name="ua_dialog_title">User-Agent preset</string>
+    <string name="ua_custom_hint">Custom user-agent string</string>
+    <string name="ua_applied">User-Agent: %1$s</string>
+    <string name="no_api_key">No API key for %1$s — set one in Control Center → AI Providers</string>
+    <string name="thinking">Thinking…</string>
+    <string name="ai_error">AI error: %1$s</string>
+    <string name="answer_hint">AI answers appear here</string>
+</resources>
