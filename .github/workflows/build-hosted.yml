@@ -33,11 +33,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      # NOTE: no android-actions/setup-android here — the ubuntu-latest image
+      # ships the Android SDK preinstalled (ANDROID_HOME set, licenses
+      # accepted). The setup-android action currently fails on sdkmanager 16.
 
       - uses: gradle/actions/setup-gradle@v3
-        with:
-          cache-read-only: false
 
       - name: Gradle report (version sanity)
         run: gradle --version | head -8
@@ -69,7 +69,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      # See note in the compile job: SDK is preinstalled on the image.
 
       - uses: gradle/actions/setup-gradle@v3
 
