@@ -4,6 +4,7 @@
 package com.agentbrowser.security
 
 import android.content.ContentValues
+import com.agentbrowser.automation.DomainPermission
 import com.agentbrowser.automation.PermissionManager
 import com.agentbrowser.agent.db.AgentDatabase
 

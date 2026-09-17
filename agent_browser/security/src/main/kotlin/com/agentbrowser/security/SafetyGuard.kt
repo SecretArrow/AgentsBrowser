@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 package com.agentbrowser.security
 
-import com.agentbrowser.ai.guard.PromptGuard
 import com.agentbrowser.agent.state.StateManager
 
 /**

@@ -227,14 +227,14 @@ data class ToolResult(
         fun fail(action: String, error: String) = Builder(action).apply { this.error = error }.build(false)
     }
 
-    class Builder(internal val action: String) {
+    class Builder(val action: String) {
         var target: String? = null
         var pageChanged: Boolean = false
         var url: String? = null
         var title: String? = null
         var dataJson: String? = null
         var error: String? = null
-        internal fun build(success: Boolean) = ToolResult(
+        fun build(success: Boolean) = ToolResult(
             success = success, action = action, target = target, pageChanged = pageChanged,
             url = url, title = title, dataJson = dataJson, error = error,
         )

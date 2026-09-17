@@ -44,8 +44,8 @@ class GoalManager(private val db: AgentDatabase) {
             put("description", goal.description)
             put("instruction", goal.naturalLanguageInstruction)
             put("enabled", goal.enabled)
-            put("schedule_json", goal.schedule?.let { o -> JSONObject(mapSerde.encodeTrigger(it)).toString() } ?: JSONObject.NULL)
-            put("triggers_json", JSONArray(goal.triggers.map { JSONObject(mapSerde.encodeTrigger(it)).toString() }).toString())
+            put("schedule_json", goal.schedule?.let { TriggerSerde.encodeTrigger(it) } ?: JSONObject.NULL)
+            put("triggers_json", JSONArray(goal.triggers.map { TriggerSerde.encodeTrigger(it) }).toString())
             put("allowed_domains", JSONArray(goal.allowedDomains).toString())
             put("blocked_domains", JSONArray(goal.blockedDomains).toString())
             put("allowed_actions", JSONArray(goal.allowedActions).toString())
@@ -73,36 +73,41 @@ class GoalManager(private val db: AgentDatabase) {
         val out = mutableListOf<AgentGoal>()
         db.readableDatabase.query("goals", null, null, null, null, null, "created_at DESC").use { c ->
             while (c.moveToNext()) {
-                val scheduleJson = c.getString(c.getColumnIndexOrThrow("schedule_json"))
-                val triggersJson = c.getString(c.getColumnIndexOrThrow("triggers_json"))
+                fun s(col: String): String? = c.getString(c.getColumnIndexOrThrow(col))
+                fun n(col: String): Int = c.getInt(c.getColumnIndexOrThrow(col))
+                fun l(col: String): Long = c.getLong(c.getColumnIndexOrThrow(col))
+                fun lngOrNull(col: String): Long? = if (c.isNull(c.getColumnIndexOrThrow(col))) null else c.getLong(c.getColumnIndexOrThrow(col))
+                fun list(col: String): List<String> = jsonArrayToList(s(col))
                 out.add(
                     AgentGoal(
-                        id = c.getString(0),
-                        name = c.getString(1),
-                        description = c.getString(2) ?: "",
-                        naturalLanguageInstruction = c.getString(3),
-                        enabled = c.getInt(4) == 1,
-                        schedule = scheduleJson?.let { mapSerde.decodeTrigger(JSONObject(it)) } as? TriggerSpec.Time,
-                        triggers = JSONArray(triggersJson).let { arr ->
-                            (0 until arr.length()).mapNotNull { i ->
-                                mapSerde.decodeTrigger(arr.getJSONObject(i))
-                            }
+                        id = s("id")!!,
+                        name = s("name")!!,
+                        description = s("description") ?: "",
+                        naturalLanguageInstruction = s("instruction")!!,
+                        enabled = n("enabled") == 1,
+                        schedule = s("schedule_json")?.let {
+                            TriggerSerde.decodeTrigger(JSONObject(it)) as? TriggerSpec.Time
                         },
-                        allowedDomains = jsonArrayToList(c.getString(8)),
-                        blockedDomains = jsonArrayToList(c.getString(9)),
-                        allowedActions = jsonArrayToList(c.getString(10)),
-                        blockedActions = jsonArrayToList(c.getString(11)),
-                        confirmationPolicy = c.getString(12),
-                        notificationPolicy = c.getString(13),
-                        memoryPolicy = c.getString(14),
-                        maxSteps = c.getInt(15),
-                        maxRuntimeMs = c.getLong(16),
-                        maxRetries = c.getInt(17),
-                        lastRunAt = if (c.isNull(19)) null else c.getLong(19),
-                        nextRunAt = if (c.isNull(20)) null else c.getLong(20),
-                        status = AgentStatus.valueOf(c.getString(21)),
-                        createdAt = c.getLong(22),
-                        updatedAt = c.getLong(23),
+                        triggers = s("triggers_json")?.let { json ->
+                            JSONArray(json).let { arr ->
+                                (0 until arr.length()).mapNotNull { i -> TriggerSerde.decodeTrigger(arr.getJSONObject(i)) }
+                            }
+                        } ?: emptyList(),
+                        allowedDomains = list("allowed_domains"),
+                        blockedDomains = list("blocked_domains"),
+                        allowedActions = list("allowed_actions"),
+                        blockedActions = list("blocked_actions"),
+                        confirmationPolicy = s("confirmation_policy") ?: "risky_only",
+                        notificationPolicy = s("notification_policy") ?: "on_failure",
+                        memoryPolicy = s("memory_policy") ?: "standard",
+                        maxSteps = n("max_steps"),
+                        maxRuntimeMs = l("max_runtime_ms"),
+                        maxRetries = n("max_retries"),
+                        lastRunAt = lngOrNull("last_run_at"),
+                        nextRunAt = lngOrNull("next_run_at"),
+                        status = AgentStatus.valueOf(s("status") ?: "DISABLED"),
+                        createdAt = l("created_at"),
+                        updatedAt = l("updated_at"),
                     ),
                 )
             }

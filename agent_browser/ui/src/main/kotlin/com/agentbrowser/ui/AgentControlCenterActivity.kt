@@ -58,15 +58,6 @@ class AgentControlCenterActivity : Activity() {
         render(counters)
     }
 
-    override fun onResume() {
-        super.onResume()
-        render(
-            findViewById<LinearLayout>(0).let { _ ->
-                findViewById<TextView>(android.R.id.text1) ?: TextView(this)
-            },
-        )
-    }
-
     private fun render(counters: TextView) {
         val goals = db.writableDatabase
         val runs = mutableListOf<Pair<String, Int>>()

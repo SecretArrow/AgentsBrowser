@@ -4,7 +4,6 @@
 package com.agentbrowser.agent.runtime
 
 import com.agentbrowser.ai.guard.CostGuard
-import com.agentbrowser.ai.guard.PromptGuard
 import com.agentbrowser.ai.provider.ChatMessage
 import com.agentbrowser.ai.provider.CompletionRequest
 import com.agentbrowser.ai.provider.ProviderManager
@@ -23,6 +22,7 @@ import com.agentbrowser.agent.state.StateManager
 import com.agentbrowser.memory.MemoryManager
 import com.agentbrowser.security.DomainPolicyStore
 import com.agentbrowser.security.NotificationManagerAgent
+import com.agentbrowser.security.PromptGuard
 import com.agentbrowser.security.ResourceLimits
 import com.agentbrowser.security.SafetyGuard
 import com.agentbrowser.security.SecureKeyStore

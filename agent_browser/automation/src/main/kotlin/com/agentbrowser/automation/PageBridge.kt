@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 package com.agentbrowser.automation
 
+import com.agentbrowser.agent.model.SemanticElement
+
 /**
  * Bridge from agent tools to Chromium's browser process (spec section 10).
  * Implemented in agent_browser/browser by glue code that talks to

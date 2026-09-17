@@ -9,6 +9,7 @@ android_library("agent_browser_agent") {
     "src/main/kotlin/com/agentbrowser/agent/goal/GoalManager.kt",
     "src/main/kotlin/com/agentbrowser/agent/goal/NaturalLanguageGoalParser.kt",
     "src/main/kotlin/com/agentbrowser/agent/goal/TriggerManager.kt",
+    "src/main/kotlin/com/agentbrowser/agent/goal/TriggerSerde.kt",
     "src/main/kotlin/com/agentbrowser/agent/runtime/AgentRuntime.kt",
     "src/main/kotlin/com/agentbrowser/agent/runtime/ApprovalManager.kt",
     "src/main/kotlin/com/agentbrowser/agent/runtime/AuditLogger.kt",

@@ -18,9 +18,9 @@ class BrowserTools(private val bridge: PageBridge) {
     fun registerAll(register: (AgentTool) -> Unit) {
         // --- Navigation ---
         register(tool("openUrl", "Navigate the current tab to a URL.", ActionRisk.SAFE) { args ->
-            val url = requireUrl(args)
-            bridge.navigate(url)
-            ToolResult.ok("openUrl", { url = url; pageChanged = true })
+            val dest = requireUrl(args)
+            bridge.navigate(dest)
+            ToolResult.ok("openUrl") { url = dest; pageChanged = true }
         })
         register(tool("searchWeb", "Search the web via the default search engine.", ActionRisk.SAFE) { args ->
             val q = args.optString("query")
@@ -232,7 +232,3 @@ class BrowserTools(private val bridge: PageBridge) {
             }
         }
 }
-
-// Convenience: allow ToolResult.ok builder-style initialization with receiver.
-private inline fun ToolResult.Companion.ok(action: String, init: ToolResult.Builder.() -> Unit): ToolResult =
-    Builder(action).apply(init).build(true)
