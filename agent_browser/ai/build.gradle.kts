@@ -16,6 +16,7 @@ android {
 
 dependencies {
     implementation(project(":security"))
+    implementation(project(":automation")) // ResearchAgent uses PageBridge
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     testImplementation("junit:junit:4.13.2")
 }

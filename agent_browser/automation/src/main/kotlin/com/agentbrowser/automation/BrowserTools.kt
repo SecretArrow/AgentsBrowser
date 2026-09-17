@@ -29,8 +29,8 @@ class BrowserTools(private val bridge: PageBridge) {
         })
         register(simple("goBack", "Go back in history.", ActionRisk.SAFE) { bridge.goBack() })
         register(simple("goForward", "Go forward in history.", ActionRisk.SAFE) { bridge.goForward() })
-        register(simple("reload", "Reload the page.", ActionRisk.SAFE) { bridge.reload() })
-        register(simple("stopLoading", "Stop page loading.", ActionRisk.SAFE) { bridge.stopLoading() })
+        register(simple("reload", "Reload the page.", ActionRisk.SAFE) { bridge.reload(); true })
+        register(simple("stopLoading", "Stop page loading.", ActionRisk.SAFE) { bridge.stopLoading(); true })
 
         // --- Tabs ---
         register(tool("createTab", "Open a new tab, optionally at a URL.", ActionRisk.SAFE) { args ->

@@ -7,7 +7,6 @@ import android.content.Context
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.widget.LinearLayout
-import com.agentbrowser.ui.databinding.AgentPanelBinding
 
 /**
  * Page Assistant panel (spec sections 38, 45): Ask Agent input plus quick

@@ -17,6 +17,7 @@ android_library("agent_browser_ai") {
     "src/main/kotlin/com/agentbrowser/ai/research/ResearchAgent.kt",
   ]
   deps = [
+    "//agent_browser/automation:agent_browser_automation",
     "//agent_browser/security:agent_browser_security",
   ]
 }
