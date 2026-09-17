@@ -6,24 +6,21 @@ import("//build/config/android/rules.gni")
 
 android_library("agent_browser_agent") {
   sources = [
-    "src/main/kotlin/com/agentbrowser/agent/db/AgentDatabase.kt",
     "src/main/kotlin/com/agentbrowser/agent/goal/GoalManager.kt",
     "src/main/kotlin/com/agentbrowser/agent/goal/NaturalLanguageGoalParser.kt",
     "src/main/kotlin/com/agentbrowser/agent/goal/TriggerManager.kt",
-    "src/main/kotlin/com/agentbrowser/agent/model/Models.kt",
     "src/main/kotlin/com/agentbrowser/agent/runtime/AgentRuntime.kt",
     "src/main/kotlin/com/agentbrowser/agent/runtime/ApprovalManager.kt",
     "src/main/kotlin/com/agentbrowser/agent/runtime/AuditLogger.kt",
     "src/main/kotlin/com/agentbrowser/agent/runtime/LoopDetector.kt",
     "src/main/kotlin/com/agentbrowser/agent/runtime/RetryManager.kt",
-    "src/main/kotlin/com/agentbrowser/agent/state/StateManager.kt",
   ]
   deps = [
+    "//agent_browser/core:agent_browser_core",
     "//agent_browser/ai:agent_browser_ai",
     "//agent_browser/automation:agent_browser_automation",
     "//agent_browser/memory:agent_browser_memory",
     "//agent_browser/security:agent_browser_security",
-    "//third_party/kotlinx_coroutines:coroutines",
   ]
 }
 

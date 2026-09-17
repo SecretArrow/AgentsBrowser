@@ -5,12 +5,13 @@ package com.agentbrowser.ui
 
 import android.app.Activity
 import android.os.Bundle
-import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.agentbrowser.agent.db.AgentDatabase
 import com.agentbrowser.agent.model.AgentStatus
+import com.agentbrowser.agent.state.StateManager
+import com.agentbrowser.security.SafetyGuard
 
 /**
  * Agent Control Center (spec section 35): overview counters for
@@ -27,8 +28,8 @@ class AgentControlCenterActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         db = AgentDatabase.get(this)
-        state = com.agentbrowser.agent.state.StateManager(this)
-        safety = com.agentbrowser.security.SafetyGuard(state)
+        state = StateManager(this)
+        safety = SafetyGuard(state)
 
         val pad = (resources.displayMetrics.density * 16).toInt()
         val root = LinearLayout(this).apply {

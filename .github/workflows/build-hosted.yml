@@ -1,0 +1,88 @@
+# Full build lane on GitHub-hosted runners: compiles ALL agent modules,
+# runs unit tests, uploads AAR artifacts. Fast: cached Gradle, parallel jobs.
+name: build-full
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent_browser/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "settings.gradle.kts"
+      - ".github/workflows/build-hosted.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-full-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: false
+
+      - name: Gradle report (version sanity)
+        run: gradle --version | head -8
+
+      - name: Assemble all modules (release)
+        run: gradle assembleRelease --parallel --build-cache --stacktrace
+
+      - name: Collect AAR artifacts
+        run: |
+          mkdir -p aars
+          find agent_browser -path "*/build/outputs/aar/*-release.aar" -exec cp {} aars/ \; || true
+          ls -la aars/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-browser-aars
+          path: aars/*.aar
+          retention-days: 14
+          if-no-files-found: warn
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Unit tests (all modules)
+        run: gradle testReleaseUnitTest --parallel --continue --stacktrace
+
+      - name: Publish test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/build/reports/tests/**
+            **/build/test-results/**
+          retention-days: 7
+          if-no-files-found: warn

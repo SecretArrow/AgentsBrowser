@@ -18,6 +18,7 @@ group("agent_browser") {
     "//agent_browser/agent:agent_browser_agent",
     "//agent_browser/automation:agent_browser_automation",
     "//agent_browser/browser:agent_browser_browser",
+    "//agent_browser/core:agent_browser_core",
     "//agent_browser/memory:agent_browser_memory",
     "//agent_browser/scheduler:agent_browser_scheduler",
     "//agent_browser/security:agent_browser_security",

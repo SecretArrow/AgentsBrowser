@@ -1,0 +1,63 @@
+# Hosted release lane: on version tags, builds all modules and publishes a
+# GitHub Release with AARs + version metadata. The Chromium APK/AAB lane
+# (release.yml) runs on a self-hosted chromium-builder runner for the same tag.
+name: release-hosted
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: "Create as draft release"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Assemble release artifacts
+        run: gradle assembleRelease --parallel --build-cache --stacktrace
+
+      - name: Stamp version record
+        run: |
+          {
+            echo "Agent Browser $(grep AGENT_BROWSER_VERSION VERSION | cut -d= -f2)"
+            echo "Chromium base: $(grep CHROMIUM_BASE VERSION | cut -d= -f2)"
+            echo "Patch revision: $(git rev-list --count HEAD)"
+            echo "Build number: ${{ github.run_number }}"
+            echo "Built by: release-hosted (GitHub-hosted lane)"
+          } > build-metadata.txt
+          cat build-metadata.txt
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          find agent_browser -path "*/build/outputs/aar/*-release.aar" -exec cp {} dist/ \; || true
+          cp build-metadata.txt dist/
+          ls -la dist/
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: ${{ github.event.inputs.draft || 'false' }}
+          generate_release_notes: true
+          files: |
+            dist/*.aar
+            dist/build-metadata.txt

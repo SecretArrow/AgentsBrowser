@@ -4,12 +4,13 @@
 package com.agentbrowser.security
 
 import com.agentbrowser.ai.guard.PromptGuard
+import com.agentbrowser.agent.state.StateManager
 
 /**
  * Hard security boundaries that no user policy or goal can override
  * (spec sections 25, 40, 41, 63).
  */
-class SafetyGuard(private val state: com.agentbrowser.agent.state.StateManager) {
+class SafetyGuard(private val state: StateManager) {
 
     /** Actions that are never exposed to the AI, regardless of configuration. */
     val forbiddenActions = setOf(
