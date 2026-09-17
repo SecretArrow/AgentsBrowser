@@ -43,6 +43,10 @@ interface PageBridge {
     fun download(url: String): String?
     fun upload(paths: List<String>): Boolean
 
+    /** Custom User-Agent support: apply and query the active UA. */
+    fun setUserAgent(ua: String)
+    fun userAgent(): String?
+
     /** Vision-model element location fallback (spec section 13). */
     suspend fun visionLocate(query: String, screenshotBase64: String?): SemanticElement?
 

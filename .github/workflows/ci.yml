@@ -58,7 +58,7 @@ jobs:
       - name: Validate patch series
         run: |
           while IFS= read -r p; do
-            case "$p" in ''|#*) continue ;; esac
+            case "$p" in ''|'#'*) continue ;; esac
             test -f "agent_browser/integration/patches/$p" || { echo "missing $p"; exit 1; }
           done < agent_browser/integration/patches/SERIES
           echo "patch series OK"

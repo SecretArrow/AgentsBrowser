@@ -175,6 +175,24 @@ class BrowserTools(private val bridge: PageBridge) {
             if (ok) ToolResult.ok("uploadFile") else ToolResult.fail("uploadFile", "upload failed")
         })
 
+        // --- User agent ---
+        register(tool("setUserAgent", "Set a custom user agent for the current session.", ActionRisk.SAFE) { args ->
+            val ua = args.optString("ua").trim()
+            if (ua.isEmpty()) {
+                bridge.setUserAgent("")
+                ToolResult.ok("setUserAgent") { dataJson = JSONObject().put("ua", "(reset to default)").toString() }
+            } else {
+                if (ua.length > 512) return@tool ToolResult.fail("setUserAgent", "ua too long (max 512 chars)")
+                bridge.setUserAgent(ua)
+                ToolResult.ok("setUserAgent") { dataJson = JSONObject().put("ua", ua).toString() }
+            }
+        })
+        register(tool("getUserAgent", "Get the currently active user agent.", ActionRisk.SAFE) { _ ->
+            val ua = bridge.userAgent()
+            if (ua != null) ToolResult.ok("getUserAgent") { dataJson = JSONObject().put("ua", ua).toString() }
+            else ToolResult.fail("getUserAgent", "user agent unavailable")
+        })
+
         // --- Bookmarks & user ---
         register(tool("saveBookmark", "Bookmark the current page.", ActionRisk.SAFE) { _ ->
             ToolResult.ok("saveBookmark") { url = bridge.currentUrl(); title = bridge.pageTitle() }

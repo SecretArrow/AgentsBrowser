@@ -4,12 +4,15 @@
 name: chromium-build
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "agent_browser/**"
-      - "scripts/**"
-      - ".github/workflows/chromium-build.yml"
+  # Push trigger is disabled until a self-hosted runner labeled
+  # `chromium-builder` is registered (otherwise runs queue forever).
+  # Re-enable by uncommenting the push block below.
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "agent_browser/**"
+  #     - "scripts/**"
+  #     - ".github/workflows/chromium-build.yml"
   workflow_dispatch:
 
 permissions:
