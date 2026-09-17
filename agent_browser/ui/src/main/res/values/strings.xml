@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agent Browser</string>
+    <string name="agent_panel_title">Agent Browser AI</string>
+    <string name="action_summarize">Summarize</string>
+    <string name="action_explain">Explain</string>
+    <string name="action_translate">Translate</string>
+    <string name="action_find">Find</string>
+    <string name="action_extract">Extract</string>
+    <string name="action_compare">Compare</string>
+    <string name="action_research">Research</string>
+    <string name="action_act">Act</string>
+    <string name="action_automate">Automate</string>
+    <string name="ask_agent_hint">Ask Agent…</string>
+    <string name="ask_send">Send</string>
+    <string name="control_center_title">Agent Control Center</string>
+    <string name="stop_all_agents">Stop All Agents</string>
+    <string name="mode_manual">Manual</string>
+    <string name="mode_copilot">Copilot</string>
+    <string name="mode_autonomous">Autonomous</string>
+    <string name="approval_title">ACTION REQUIRES APPROVAL</string>
+    <string name="approval_edit">Edit</string>
+    <string name="approval_reject">Reject</string>
+    <string name="approval_approve">Approve</string>
+</resources>

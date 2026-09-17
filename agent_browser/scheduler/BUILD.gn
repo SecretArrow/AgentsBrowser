@@ -1,0 +1,17 @@
+# Copyright 2026 The Agent Browser Authors. All rights reserved.
+# Use of this source code is governed by an Apache-2.0 license that can be
+# found in the LICENSE file.
+
+import("//build/config/android/rules.gni")
+
+android_library("agent_browser_scheduler") {
+  sources = [
+    "src/main/kotlin/com/agentbrowser/scheduler/AgentGoalWorker.kt",
+    "src/main/kotlin/com/agentbrowser/scheduler/AgentScheduler.kt",
+  ]
+  deps = [
+    "//agent_browser/agent:agent_browser_agent",
+    "//agent_browser/browser:agent_browser_browser",
+    "//third_party/android_deps:androidx_work_work_runtime",
+  ]
+}

@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000003 Mon Sep 17 00:00:00 2001
+From: Agent Browser Authors <dev@agentbrowser.invalid>
+Subject: [PATCH 3/3] chrome: Agent Browser new-tab page and control intents
+
+Registers chrome://agent-browser/newtab and the Agent Control Center launch
+intent. No Google Chrome branding is used anywhere.
+---
+ chrome/android/java/AndroidManifest.xml | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/AndroidManifest.xml
+index 0000000..0000004 100644
+--- a/chrome/android/java/AndroidManifest.xml
++++ b/chrome/android/java/AndroidManifest.xml
+@@ -1,3 +1,12 @@
++<!-- Agent Browser branding and control surfaces -->
++<activity
++    android:name="com.agentbrowser.ui.AgentControlCenterActivity"
++    android:label="Agent Control Center"
++    android:exported="false" />
++
++<!-- New-tab URL override handled natively via ChromeActivity; NTP branding
++     lives in agent_browser/browser NtpBranding.kt. -->
++
+--
+2.45.0

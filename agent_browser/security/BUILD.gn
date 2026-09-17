@@ -1,0 +1,19 @@
+# Copyright 2026 The Agent Browser Authors. All rights reserved.
+# Use of this source code is governed by an Apache-2.0 license that can be
+# found in the LICENSE file.
+
+import("//build/config/android/rules.gni")
+
+android_library("agent_browser_security") {
+  sources = [
+    "src/main/kotlin/com/agentbrowser/security/DomainPolicyStore.kt",
+    "src/main/kotlin/com/agentbrowser/security/NotificationManagerAgent.kt",
+    "src/main/kotlin/com/agentbrowser/security/ResourceLimits.kt",
+    "src/main/kotlin/com/agentbrowser/security/SafetyGuard.kt",
+    "src/main/kotlin/com/agentbrowser/security/SecureKeyStore.kt",
+    "src/main/kotlin/com/agentbrowser/security/SensitiveDataFilter.kt",
+  ]
+  deps = [
+    "//agent_browser/automation:agent_browser_automation",
+  ]
+}

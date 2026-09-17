@@ -1,0 +1,24 @@
+# Copyright 2026 The Agent Browser Authors. All rights reserved.
+# Use of this source code is governed by an Apache-2.0 license that can be
+# found in the LICENSE file.
+
+import("//build/config/android/rules.gni")
+
+android_library("agent_browser_ui") {
+  sources = [
+    "src/main/kotlin/com/agentbrowser/ui/AgentControlCenterActivity.kt",
+    "src/main/kotlin/com/agentbrowser/ui/AgentPanelView.kt",
+  ]
+  deps = [
+    "//agent_browser/agent:agent_browser_agent",
+    "//agent_browser/security:agent_browser_security",
+    "//ui/android:ui_java",
+  ]
+}
+
+android_resources("agent_browser_ui_resources") {
+  resource_dirs = [ "src/main/res" ]
+  deps = [
+    ":agent_browser_ui",
+  ]
+}

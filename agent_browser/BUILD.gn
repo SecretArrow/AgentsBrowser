@@ -1,0 +1,34 @@
+# Copyright 2026 The Agent Browser Authors. All rights reserved.
+# Use of this source code is governed by an Apache-2.0 license that can be
+# found in the LICENSE file.
+#
+# Agent Browser modular layer (spec section 3). Each module stays separable
+# from upstream Chromium to keep rebasing cheap.
+
+import("//build/config/android/config.gni")
+import("//build/config/android/rules.gni")
+
+config("agent_browser_config") {
+  include_dirs = [ "//agent_browser" ]
+}
+
+group("agent_browser") {
+  deps = [
+    "//agent_browser/ai:agent_browser_ai",
+    "//agent_browser/agent:agent_browser_agent",
+    "//agent_browser/automation:agent_browser_automation",
+    "//agent_browser/browser:agent_browser_browser",
+    "//agent_browser/memory:agent_browser_memory",
+    "//agent_browser/scheduler:agent_browser_scheduler",
+    "//agent_browser/security:agent_browser_security",
+    "//agent_browser/ui:agent_browser_ui",
+  ]
+}
+
+# Android instrumentation smoke tests for the agent modules.
+group("agent_browser_tests") {
+  testonly = true
+  deps = [
+    "//agent_browser/agent:agent_browser_agent_tests",
+  ]
+}

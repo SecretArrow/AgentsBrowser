@@ -1,0 +1,90 @@
+# Heuristic auto-fix: when CI fails, this workflow collects logs, applies
+# safe mechanical fixes, pushes to main, and retries. It never touches
+# secrets and never force-pushes.
+name: auto-fix
+
+on:
+  workflow_run:
+    workflows: [ci-fast, chromium-build]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Failed run id to analyze (optional)"
+        required: false
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+
+concurrency:
+  group: auto-fix
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    if: github.event.workflow_run.conclusion == 'failure' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect failed job logs
+        id: logs
+        if: github.event_name == 'workflow_run'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runId = context.payload.workflow_run.id;
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              owner: context.repo.owner, repo: context.repo.repo, run_id: runId, per_page: 100
+            });
+            const failed = jobs.filter(j => j.conclusion === 'failure');
+            const summary = failed.map(j => `- ${j.name} (${j.conclusion})`).join('\n');
+            core.exportVariable('FAILED_JOBS', summary || 'none');
+            core.setOutput('failed_count', failed.length);
+
+      - name: Heuristic fixes
+        id: fixes
+        run: |
+          set -e
+          bash scripts/ci-auto-fix.sh || true
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push fixes
+        if: steps.fixes.outputs.changed == 'true'
+        run: |
+          git config user.name "agent-browser-autofix"
+          git config user.email "autofix@agentbrowser.invalid"
+          git add -A
+          git commit -m "ci: auto-fix heuristics for failed run ${{ github.event.workflow_run.id || 'manual' }} [skip ci]"
+          git push origin HEAD:${{ github.event.workflow_run.head_branch || 'main' }}
+
+      - name: Re-run failed workflow
+        if: steps.fixes.outputs.changed == 'true' && github.event_name == 'workflow_run'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.reRunWorkflowFailedJobs({
+              owner: context.repo.owner, repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id
+            });
+
+      - name: Open tracking issue when unfixable
+        if: steps.fixes.outputs.changed == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: `CI failure needs manual attention (${context.payload.workflow_run?.id || 'manual'})`,
+              body: `Failed jobs:\n${process.env.FAILED_JOBS || 'see workflow'}\n\nAuto-fix found no safe heuristic to apply.`,
+              labels: ['ci-failure']
+            });

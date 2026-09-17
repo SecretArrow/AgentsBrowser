@@ -1,0 +1,80 @@
+# Fast CI — runs on ubuntu-latest in seconds-scale, no Chromium checkout.
+# Validates repo structure, syntax of all build files, and patch series integrity.
+name: ci-fast
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Repo structure invariants
+        run: |
+          set -e
+          test -f agent_browser/BUILD.gn
+          test -f agent_browser/integration/patches/SERIES
+          test -f VERSION
+          test -f scripts/sync-chromium.sh
+          echo "structure OK"
+
+      - name: Validate workflow YAML
+        run: |
+          python3 - <<'EOF'
+          import sys, yaml, glob
+          for f in glob.glob('.github/workflows/*.yml'):
+              with open(f) as fh:
+                  yaml.safe_load(fh)
+              print('ok', f)
+          EOF
+
+      - name: Validate GN files (brace/paren balance + header)
+        run: |
+          python3 - <<'EOF'
+          import glob, sys
+          bad = []
+          for f in glob.glob('agent_browser/**/*.gn', recursive=True):
+              s = open(f).read()
+              if s.count('{') != s.count('}'): bad.append(f + ' braces')
+              if s.count('(') != s.count(')'): bad.append(f + ' parens')
+          if bad:
+              print('\n'.join(bad)); sys.exit(1)
+          print('GN files OK')
+          EOF
+
+      - name: Validate patch series
+        run: |
+          while IFS= read -r p; do
+            case "$p" in ''|#*) continue ;; esac
+            test -f "agent_browser/integration/patches/$p" || { echo "missing $p"; exit 1; }
+          done < agent_browser/integration/patches/SERIES
+          echo "patch series OK"
+
+      - name: Kotlin brace balance (fast heuristic, not full compile)
+        run: |
+          python3 - <<'EOF'
+          import glob, sys
+          bad = []
+          for f in glob.glob('agent_browser/**/*.kt', recursive=True):
+              s = open(f).read()
+              if s.count('{') != s.count('}'): bad.append(f)
+          if bad:
+              print('\n'.join(bad)); sys.exit(1)
+          print('Kotlin balance OK')
+          EOF
+
+      - name: Version record sanity
+        run: grep -q '^AGENT_BROWSER_VERSION=' VERSION

@@ -1,0 +1,22 @@
+# Copyright 2026 The Agent Browser Authors. All rights reserved.
+# Use of this source code is governed by an Apache-2.0 license that can be
+# found in the LICENSE file.
+
+import("//build/config/android/rules.gni")
+
+android_library("agent_browser_ai") {
+  sources = [
+    "src/main/kotlin/com/agentbrowser/ai/guard/CostGuard.kt",
+    "src/main/kotlin/com/agentbrowser/ai/guard/PromptGuard.kt",
+    "src/main/kotlin/com/agentbrowser/ai/provider/AnthropicProvider.kt",
+    "src/main/kotlin/com/agentbrowser/ai/provider/AiProvider.kt",
+    "src/main/kotlin/com/agentbrowser/ai/provider/GeminiProvider.kt",
+    "src/main/kotlin/com/agentbrowser/ai/provider/OpenAiCompatProvider.kt",
+    "src/main/kotlin/com/agentbrowser/ai/provider/ProviderHttp.kt",
+    "src/main/kotlin/com/agentbrowser/ai/provider/ProviderManager.kt",
+    "src/main/kotlin/com/agentbrowser/ai/research/ResearchAgent.kt",
+  ]
+  deps = [
+    "//agent_browser/security:agent_browser_security",
+  ]
+}

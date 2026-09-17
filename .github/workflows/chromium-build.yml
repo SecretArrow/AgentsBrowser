@@ -1,0 +1,71 @@
+# Full Chromium Android build — runs ONLY on a self-hosted runner with the
+# `chromium-builder` label (docs/RUNNER-SETUP.md). On failure, the auto-fix
+# workflow applies heuristic fixes, pushes them, and this workflow re-runs.
+name: chromium-build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent_browser/**"
+      - "scripts/**"
+      - ".github/workflows/chromium-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: chromium-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, chromium-builder]
+    timeout-minutes: 600
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight (disk, RAM, tools)
+        run: bash scripts/preflight-checks.sh
+
+      - name: Sync Chromium
+        run: bash scripts/sync-chromium.sh
+        env:
+          CHROMIUM_BRANCH: android-15.0.0_r1
+
+      - name: Apply agent_browser layer + patches
+        run: bash scripts/apply-agent-layer.sh
+
+      - name: Configure GN
+        run: bash scripts/configure-gn.sh
+
+      - name: Build APK/AAB (incremental)
+        run: bash scripts/build-chromium-android.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-browser-apks
+          path: |
+            chromium/out/AgentBrowser/apks/*.apk
+            chromium/out/AgentBrowser/apks/*.aab
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: File build failure report
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = '';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `chromium-build failed on ${context.sha.slice(0,7)}`,
+              body: 'Auto-fix will retry. Run: ' + context.runId,
+              labels: ['ci-failure']
+            });

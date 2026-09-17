@@ -1,0 +1,73 @@
+# Release pipeline (spec section 71): debug APK, release APK, release AAB.
+# Signing material comes ONLY from CI secrets — nothing is committed.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: [self-hosted, chromium-builder]
+    timeout-minutes: 600
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight
+        run: bash scripts/preflight-checks.sh
+
+      - name: Sync + apply + build
+        run: |
+          bash scripts/sync-chromium.sh
+          bash scripts/apply-agent-layer.sh
+          bash scripts/build-chromium-android.sh
+
+      - name: Decode signing keystore from secrets
+        run: |
+          if [ -z "${{ secrets.AB_KEYSTORE_BASE64 }}" ]; then
+            echo "AB_KEYSTORE_BASE64 not set; producing UNSIGNED artifacts"
+            echo "UNSIGNED=1" >> "$GITHUB_ENV"
+          else
+            echo "${{ secrets.AB_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/ab.keystore"
+            echo "UNSIGNED=0" >> "$GITHUB_ENV"
+          fi
+        env:
+          AB_KEYSTORE_BASE64: ${{ secrets.AB_KEYSTORE_BASE64 }}
+
+      - name: Sign release APK
+        if: env.UNSIGNED == '0'
+        run: |
+          APKS_DIR="chromium/out/AgentBrowser/apks"
+          for apk in "$APKS_DIR"/chrome_public*.apk; do
+            [ -e "$apk" ] || continue
+            /usr/bin/env apksigner sign \
+              --ks "$RUNNER_TEMP/ab.keystore" \
+              --ks-pass pass:"${{ secrets.AB_KEYSTORE_PASSWORD }}" \
+              --ks-key-alias "${{ secrets.AB_KEY_ALIAS }}" \
+              --key-pass pass:"${{ secrets.AB_KEY_PASSWORD }}" \
+              --out "${apk%.apk}-release-signed.apk" "$apk"
+          done
+          rm -f "$RUNNER_TEMP/ab.keystore"
+
+      - name: Stamp version record
+        run: |
+          {
+            echo "AGENT_BROWSER_VERSION=$(grep AGENT_BROWSER_VERSION VERSION | cut -d= -f2)"
+            echo "CHROMIUM_REVISION=$(git -C chromium rev-parse HEAD 2>/dev/null || echo unknown)"
+            echo "PATCH_REVISION=$(git rev-list --count HEAD)"
+            echo "BUILD_NUMBER=${{ github.run_number }}"
+          } > build-metadata.txt
+          cat build-metadata.txt
+
+      - name: Create GitHub release with artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            chromium/out/AgentBrowser/apks/*.apk
+            chromium/out/AgentBrowser/apks/*.aab
+            build-metadata.txt
+          generate_release_notes: true

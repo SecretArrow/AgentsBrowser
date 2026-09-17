@@ -1,0 +1,28 @@
+# Copyright 2026 The Agent Browser Authors. All rights reserved.
+# Use of this source code is governed by an Apache-2.0 license that can be
+# found in the LICENSE file.
+
+import("//build/config/android/rules.gni")
+
+android_library("agent_browser_browser") {
+  sources = [
+    "src/main/kotlin/com/agentbrowser/browser/BrowserHost.kt",
+    "src/main/kotlin/com/agentbrowser/browser/NtpBranding.kt",
+  ]
+  deps = [
+    "//agent_browser/automation:agent_browser_automation",
+  ]
+}
+
+# JNI glue: C++ side of the controlled bridge into content/browser.
+source_set("agent_browser_jni") {
+  sources = [
+    "src/main/jni/agent_browser_bridge.cc",
+    "src/main/jni/agent_browser_bridge.h",
+  ]
+  deps = [
+    "//base",
+    "//content/public/browser",
+    "//third_party/jni_zero",
+  ]
+}

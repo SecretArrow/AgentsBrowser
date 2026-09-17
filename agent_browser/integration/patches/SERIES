@@ -1,0 +1,4 @@
+# Agent Browser Chromium patch series (applied in order; see docs/REBASE.md)
+0001-add-agent_browser-layer-to-gn.patch
+0002-chrome-agent-runtime-integration.patch
+0003-agent-newtab-and-control-intents.patch
