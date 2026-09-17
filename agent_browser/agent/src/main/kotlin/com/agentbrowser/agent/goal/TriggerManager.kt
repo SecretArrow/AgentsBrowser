@@ -31,8 +31,9 @@ object TriggerManager {
                     else -> null
                 }
                 while (true) {
-                    if (t.hourOfDay != null) {
-                        cal.set(Calendar.HOUR_OF_DAY, t.hourOfDay)
+                    val hour = t.hourOfDay
+                    if (hour != null) {
+                        cal.set(Calendar.HOUR_OF_DAY, hour)
                         cal.set(Calendar.MINUTE, t.minuteOfHour ?: 0)
                         cal.set(Calendar.SECOND, 0)
                         cal.set(Calendar.MILLISECOND, 0)

@@ -1,5 +1,5 @@
 // Copyright 2026 The Agent Browser Authors. All rights reserved.
-// Use of a time governed by an Apache-2.0 license that can be
+// Use of this source code is governed by an Apache-2.0 license that can be
 // found in the LICENSE file.
 package com.agentbrowser.agent.goal
 
@@ -23,6 +23,11 @@ object NaturalLanguageGoalParser {
         "friday" to 5, "saturday" to 6, "sunday" to 7,
     )
 
+    private val AT_TIME = Regex("""at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?""")
+    private val EVERY_N_MINUTES = Regex("""every\s+(\d+)\s+minute""")
+    private val EVERY_N_HOURS = Regex("""every\s+(\d+)\s+hour""")
+    private val WEEKDAY_NAME = Regex("""monday|tuesday|wednesday|thursday|friday|saturday|sunday""")
+
     fun parse(instruction: String): Parsed {
         val text = instruction.lowercase()
 
@@ -33,7 +38,7 @@ object NaturalLanguageGoalParser {
         var days: List<Int> = emptyList()
 
         // "at 9 AM" / "at 14:30"
-        Regex("""at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?""").find(text)?.let { m ->
+        AT_TIME.find(text)?.let { m ->
             hour = m.groupValues[1].toInt()
             minute = m.groupValues[2].toIntOrNull() ?: 0
             if (m.groupValues[3] == "pm" && hour != 12) hour = hour!! + 12
@@ -41,34 +46,30 @@ object NaturalLanguageGoalParser {
         }
 
         when {
-            text.contains("every weekday") || text.contains("weekdays") -> {
-                kind = "weekdays"
-            }
+            text.contains("every weekday") || text.contains("weekdays") -> kind = "weekdays"
             text.contains("every morning") -> {
                 kind = "daily"
-                if (hour == null) { hour = 8; minute = 0 }
+                if (hour == null) {
+                    hour = 8
+                    minute = 0
+                }
             }
-            Regex("""every\s+monday|tuesday|wednesday|thursday|friday|saturday|sunday""").containsMatchIn(text) -> {
+            WEEKDAY_NAME.containsMatchIn(text) && text.contains("every") -> {
                 kind = "weekly"
-                days = listOf(dayNames.entries.first { text.contains(it.key) }.value)
+                val dayName = dayNames.keys.first { text.contains(it) }
+                days = listOf(dayNames.getValue(dayName))
             }
-            text.contains("monthly") -> {
-                kind = "monthly"
-            }
-            Regex("""every\s+(\d+)\s+minute""").find(text)?.let { m ->
+            text.contains("monthly") -> kind = "monthly"
+            EVERY_N_MINUTES.find(text) != null -> {
                 kind = "every_n_minutes"
-                interval = m.groupValues[1].toLong()
+                interval = EVERY_N_MINUTES.find(text)!!.groupValues[1].toLong()
             }
-            Regex("""every\s+(\d+)\s+hour""").find(text)?.let { m ->
+            EVERY_N_HOURS.find(text) != null -> {
                 kind = "every_n_minutes"
-                interval = m.groupValues[1].toLong() * 60
+                interval = EVERY_N_HOURS.find(text)!!.groupValues[1].toLong() * 60
             }
-            text.contains("every hour") -> {
-                kind = "hourly"
-            }
-            text.contains("every day") || text.contains("daily") -> {
-                kind = "daily"
-            }
+            text.contains("every hour") -> kind = "hourly"
+            text.contains("every day") || text.contains("daily") -> kind = "daily"
         }
 
         val schedule = kind?.let {

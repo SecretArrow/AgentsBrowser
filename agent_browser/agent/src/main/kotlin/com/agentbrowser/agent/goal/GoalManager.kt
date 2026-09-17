@@ -44,7 +44,11 @@ class GoalManager(private val db: AgentDatabase) {
             put("description", goal.description)
             put("instruction", goal.naturalLanguageInstruction)
             put("enabled", goal.enabled)
-            put("schedule_json", goal.schedule?.let { TriggerSerde.encodeTrigger(it) } ?: JSONObject.NULL)
+            if (goal.schedule != null) {
+                put("schedule_json", TriggerSerde.encodeTrigger(goal.schedule!!))
+            } else {
+                putNull("schedule_json")
+            }
             put("triggers_json", JSONArray(goal.triggers.map { TriggerSerde.encodeTrigger(it) }).toString())
             put("allowed_domains", JSONArray(goal.allowedDomains).toString())
             put("blocked_domains", JSONArray(goal.blockedDomains).toString())
@@ -57,8 +61,8 @@ class GoalManager(private val db: AgentDatabase) {
             put("max_runtime_ms", goal.maxRuntimeMs)
             put("max_retries", goal.maxRetries)
             put("conditions_json", "[]")
-            put("last_run_at", goal.lastRunAt ?: JSONObject.NULL)
-            put("next_run_at", goal.nextRunAt ?: JSONObject.NULL)
+            if (goal.lastRunAt != null) put("last_run_at", goal.lastRunAt) else putNull("last_run_at")
+            if (goal.nextRunAt != null) put("next_run_at", goal.nextRunAt) else putNull("next_run_at")
             put("status", goal.status.name)
             put("created_at", goal.createdAt)
             put("updated_at", System.currentTimeMillis())
