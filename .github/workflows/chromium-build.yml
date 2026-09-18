@@ -1,16 +1,19 @@
 # Full Chromium Android fork build — the real browser (100–150 MB APKs).
 #
-# Two lanes, picked by the `runner` dispatch input (default: hosted16):
-#   A) self-hosted  → a machine you registered with the `chromium-builder`
-#                     label. Free, unlimited time (docs/RUNNER-SETUP.md).
-#   B) hosted16     → GitHub larger runner `ubuntu-latest-16-cores`
-#                     (16 vCPU / 64 GB RAM / 256 GB SSD). The only GitHub
-#                     hosted machine class that fits a Chromium build.
-#                     Requires billing enabled on the account.
+# Lane is picked by the `runner` dispatch input (default: guard), which
+# resolves from the repo variable CHROMIUM_RUNNER:
+#   self-hosted → your machine labeled `chromium-builder` (free). The build
+#                 is SPLIT into three small jobs — sync → build → package —
+#                 sharing one persistent workdir (~/agentbrowser-work) on
+#                 that machine: incremental re-syncs are minutes, a failure
+#                 retries only its phase, and every job stays short.
+#   hosted16    → GitHub larger runner `ubuntu-latest-16-cores`
+#                 (16 vCPU / 64 GB RAM / 256 GB SSD). Kept as ONE job: its
+#                 disk is big enough that shuffling 25 GB of source through
+#                 artifacts between jobs would only waste time.
+#   (unset)     → runner job exits with a notice; no zombie pending runs.
 #
-# A full build takes ~4–6 h on 16 cores (symbol_level=0, no component
-# build). On tag pushes (v*) the resulting APKs are attached to the
-# GitHub release created by release-hosted.
+# On tag pushes (v*) the package job attaches the APKs to the release.
 name: chromium-build
 
 on:
@@ -45,13 +48,8 @@ concurrency:
   group: chromium-build-${{ github.ref }}
   cancel-in-progress: false
 
-# Lane is picked by the `runner` input. `guard` (the default) resolves it
-# from the repo variable CHROMIUM_RUNNER ("self-hosted" or "hosted16"):
-#   - set it once after enabling billing or registering your builder, and
-#     every future tag/dispatch builds the full fork with zero code changes.
-# If the lane is unconfigured the runner job exits with a notice instead of
-# queueing a zombie run that would wait forever for a nonexistent runner.
 jobs:
+  # ── Lane guard ────────────────────────────────────────────────────────
   runner:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -79,21 +77,94 @@ jobs:
           esac
           echo "picked lane: $lane"
 
-  build:
+  # ── Self-hosted phase 1/3: fetch source (heavy the first time only) ──
+  sync:
     needs: runner
-    if: ${{ needs.runner.outputs.lane != 'none' }}
-    # Lane A: your own machine (free). Lane B: paid 16-core larger runner.
+    if: ${{ needs.runner.outputs.lane == 'self-hosted' }}
     runs-on: ${{ needs.runner.outputs.lane }}
+    timeout-minutes: 150
+    env:
+      TARGET_CPU: ${{ inputs.target_cpu || 'arm64' }}
+      AB_WORK: ${{ vars.AB_WORK || '~/agentbrowser-work' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight (disk, RAM, tools)
+        run: bash scripts/preflight-checks.sh
+      - name: Sync Chromium (fetch + hooks; incremental on re-runs)
+        run: |
+          export DEPOT_TOOLS_DIR="$AB_WORK/depot_tools"
+          export CHROMIUM_DIR="$AB_WORK/chromium"
+          bash scripts/sync-chromium.sh
+        env:
+          CHROMIUM_BRANCH: android-15.0.0_r1
+
+  # ── Self-hosted phase 2/3: patch + compile (the long tail) ──────────
+  build:
+    needs: [runner, sync]
+    if: ${{ needs.runner.outputs.lane == 'self-hosted' }}
+    runs-on: ${{ needs.runner.outputs.lane }}
+    timeout-minutes: 330
+    env:
+      TARGET_CPU: ${{ inputs.target_cpu || 'arm64' }}
+      AB_WORK: ${{ vars.AB_WORK || '~/agentbrowser-work' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply agent_browser layer + patches
+        run: |
+          export CHROMIUM_DIR="$AB_WORK/chromium"
+          bash scripts/apply-agent-layer.sh
+      - name: Configure GN
+        run: |
+          export DEPOT_TOOLS_DIR="$AB_WORK/depot_tools"
+          export CHROMIUM_DIR="$AB_WORK/chromium"
+          bash scripts/configure-gn.sh
+      - name: Build APK (~4–5 h on 16 cores, incremental after)
+        timeout-minutes: 320
+        run: |
+          export DEPOT_TOOLS_DIR="$AB_WORK/depot_tools"
+          export CHROMIUM_DIR="$AB_WORK/chromium"
+          bash scripts/build-chromium-android.sh
+      - name: Collect APKs to workspace
+        run: |
+          mkdir -p apks
+          find "$AB_WORK/chromium/out/AgentBrowser/apks" -name '*.apk' \
+            -exec cp {} apks/ \; || true
+          find "$AB_WORK/chromium/out/AgentBrowser" -maxdepth 1 -name '*.apk' \
+            -exec cp {} apks/ \; || true
+          ls -la apks/
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-fork-apks
+          path: apks/*.apk
+          retention-days: 30
+          if-no-files-found: warn
+      - name: File build failure report
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `chromium-build failed on ${context.sha.slice(0,7)}`,
+              body: 'Auto-fix will retry. Run: ' + context.runId,
+              labels: ['ci-failure']
+            });
+
+  # ── Hosted 16-core lane: same phases, one job (256 GB disk) ─────────
+  hosted16:
+    needs: runner
+    if: ${{ needs.runner.outputs.lane == 'ubuntu-latest-16-cores' }}
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 360
     env:
       TARGET_CPU: ${{ inputs.target_cpu || 'arm64' }}
     steps:
       - uses: actions/checkout@v4
 
-      # Free up disk and add swap — hosted16 has 256 GB SSD but ships with
-      # ~30 GB of preinstalled toolchains we don't need for Chromium.
       - name: Free disk space + add swap
-        if: inputs.runner != 'self-hosted'
         run: |
           sudo swapoff -a || true
           sudo rm -f /mnt/swapfile
@@ -110,7 +181,7 @@ jobs:
       - name: Preflight (disk, RAM, tools)
         run: bash scripts/preflight-checks.sh
         env:
-          PREFLIGHT_SKIP: ${{ inputs.runner == 'self-hosted' && '' || '1' }}
+          PREFLIGHT_SKIP: "1"
 
       - name: Sync Chromium (fetch + hooks, ~25 GB)
         timeout-minutes: 90
@@ -129,46 +200,20 @@ jobs:
         run: bash scripts/build-chromium-android.sh
 
       - name: Collect APKs
-        id: collect
         run: |
           mkdir -p apks
           find chromium/out/AgentBrowser/apks -name '*.apk' -exec cp {} apks/ \; || true
           find chromium/out/AgentBrowser -maxdepth 1 -name '*.apk' -exec cp {} apks/ \; || true
-          # Rename to release-friendly names: AgentBrowser-<ver>-<cpu>.apk
-          VER="$(grep AGENT_BROWSER_VERSION VERSION | cut -d= -f2)"
-          for f in apks/*.apk; do
-            [ -e "$f" ] || continue
-            base="$(basename "$f")"
-            case "$base" in
-              *arm64*) cpu="arm64-v8a" ;;
-              *arm*)   cpu="armeabi-v7a" ;;
-              *x64*)   cpu="x86_64" ;;
-              *x86*)   cpu="x86" ;;
-              *)       cpu="unknown" ;;
-            esac
-            [ "$cpu" = "unknown" ] && cpu="$TARGET_CPU"
-            mv "$f" "apks/AgentBrowser-${VER}-${cpu}-chromium.apk"
-          done
           ls -la apks/
-          echo "count=$(ls apks/*.apk 2>/dev/null | wc -l)" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agent-browser-chromium-apks
+          name: chromium-fork-apks
           path: apks/*.apk
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: warn
-
-      # On tag pushes, attach the full-fork APKs to the release that
-      # release-hosted already created for the same tag.
-      - name: Attach APKs to release
-        if: startsWith(github.ref, 'refs/tags/') && steps.collect.outputs.count != '0'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: apks/*.apk
-          overwrite_files: true
 
       - name: File build failure report
         if: failure()
@@ -182,3 +227,51 @@ jobs:
               body: 'Auto-fix will retry. Run: ' + context.runId,
               labels: ['ci-failure']
             });
+
+  # ── Phase 3/3 (both lanes): light rename + release attach ───────────
+  package:
+    needs: [runner, build, hosted16]
+    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.hosted16.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: chromium-fork-apks
+          path: apks
+      - name: Rename per-ABI
+        run: |
+          VER="$(grep AGENT_BROWSER_VERSION VERSION | cut -d= -f2)"
+          shopt -s nullglob
+          for f in apks/*.apk; do
+            base="$(basename "$f")"
+            case "$base" in
+              *arm64*) cpu="arm64-v8a" ;;
+              *arm*)   cpu="armeabi-v7a" ;;
+              *x64*)   cpu="x86_64" ;;
+              *x86*)   cpu="x86" ;;
+              *)       cpu="unknown" ;;
+            esac
+            out="apks/AgentBrowser-${VER}-${cpu}-chromium.apk"
+            if [ -e "$out" ]; then
+              n=2
+              while [ -e "apks/AgentBrowser-${VER}-${cpu}-${n}-chromium.apk" ]; do n=$((n+1)); done
+              out="apks/AgentBrowser-${VER}-${cpu}-${n}-chromium.apk"
+            fi
+            mv -v "$f" "$out"
+          done
+          ls -la apks/
+      - name: Attach APKs to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apks/*.apk
+          overwrite_files: true
+      - name: Upload renamed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-fork-apks-renamed
+          path: apks/*.apk
+          retention-days: 30
+          if-no-files-found: error

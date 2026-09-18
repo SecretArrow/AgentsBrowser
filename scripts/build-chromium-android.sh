@@ -12,7 +12,7 @@ CHROMIUM_DIR="${CHROMIUM_DIR:-chromium}"
 BUILD_DIR="${BUILD_DIR:-out/AgentBrowser}"
 TARGET_CPU="${TARGET_CPU:-arm64}"
 
-export PATH="$PWD/depot_tools:$PATH"
+export PATH="${DEPOT_TOOLS_DIR:-$PWD/depot_tools}:$PATH"
 cd "$CHROMIUM_DIR"
 
 echo "==> GN configure ($BUILD_DIR, target_cpu=$TARGET_CPU)"

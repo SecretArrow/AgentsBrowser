@@ -11,10 +11,14 @@ CHROMIUM_DIR="${CHROMIUM_DIR:-chromium}"
 BRANCH="${CHROMIUM_BRANCH:-android-15.0.0_r1}"
 
 echo "==> Installing depot_tools"
-if [ ! -d depot_tools ]; then
-  git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
+# DEPOT_TOOLS_DIR lets CI jobs share one checkout across jobs (the clone is
+# ~1 GB); defaults to ./depot_tools next to the chromium dir.
+DEPOT_TOOLS_DIR="${DEPOT_TOOLS_DIR:-$PWD/depot_tools}"
+if [ ! -d "$DEPOT_TOOLS_DIR/.git" ]; then
+  git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git \
+    "$DEPOT_TOOLS_DIR"
 fi
-export PATH="$PWD/depot_tools:$PATH"
+export PATH="$DEPOT_TOOLS_DIR:$PATH"
 
 echo "==> Fetching Chromium (this is the long step; ~25 GB)"
 if [ ! -d "$CHROMIUM_DIR/.git" ]; then
