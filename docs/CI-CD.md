@@ -5,7 +5,7 @@
 | Workflow | Runner | Trigger | Purpose |
 |---|---|---|---|
 | `ci-fast` | `ubuntu-latest` | push/PR | seconds-scale structure + syntax validation |
-| `chromium-build` | `[self-hosted, chromium-builder]` | push to main (paths) / manual | full APK/AAB build |
+| `chromium-build` | self-hosted (`chromium-builder`) **or** hosted `ubuntu-latest-16-cores` | tag `v*` / manual | full fork APK build (~4–6 h) |
 | `auto-fix` | `ubuntu-latest` | any workflow failure | heuristic fixes, push, retry |
 | `release` | `[self-hosted, chromium-builder]` | tags `v*` | signed APK + AAB + GitHub release |
 
@@ -40,5 +40,13 @@ never echoed or committed.
 
 ## Required runner label
 
-`chromium-build` and `release` require a self-hosted runner labeled
-`chromium-builder` — see docs/RUNNER-SETUP.md.
+`chromium-build` runs on either lane (dispatch input `runner`):
+
+- **self-hosted** — free, your own machine labeled `chromium-builder`
+  (docs/RUNNER-SETUP.md). Default lane used by the autopilot.
+- **hosted16** — GitHub larger runner `ubuntu-latest-16-cores`
+  (16 vCPU / 64 GB RAM / 256 GB SSD). Requires billing enabled on the
+  account; without it the run stays `pending` until cancelled.
+
+`release` (full-fork signing lane) still requires the self-hosted
+`chromium-builder` runner — see docs/RUNNER-SETUP.md.
