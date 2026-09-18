@@ -1,10 +1,10 @@
-# Release pipeline (spec section 71): debug APK, release APK, release AAB.
-# Signing material comes ONLY from CI secrets — nothing is committed.
+# Legacy full-fork signing lane — superseded by chromium-build.yml
+# (fork build + release attach) and chromium-snapshot.yml (real Chromium
+# APKs with no builder machine). Manual-only now so v* tags never queue
+# waiting for a self-hosted runner that may not be online.
 name: release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:

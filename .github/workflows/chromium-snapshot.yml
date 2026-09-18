@@ -131,8 +131,11 @@ jobs:
           VER="$(grep AGENT_BROWSER_VERSION VERSION | cut -d= -f2)"
           OUT="AgentBrowser-Chromium-${VER}-${{ matrix.abi }}-r${{ matrix.position }}.apk"
           mv signed.apk "$OUT"
+          # Drop intermediates so wildcards can never leak them anywhere.
+          rm -f snap.zip browser.apk aligned.apk signed.apk
+          rm -rf raw
           echo "apk=$OUT" >> "$GITHUB_ENV"
-          ls -la "$OUT"
+          ls -la
 
       - name: Provenance + checksums
         run: |
@@ -151,7 +154,7 @@ jobs:
         with:
           name: chromium-snapshot-${{ matrix.abi }}
           path: |
-            *.apk
+            AgentBrowser-*.apk
             provenance-*.txt
           retention-days: 30
           if-no-files-found: error
