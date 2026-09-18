@@ -6,6 +6,16 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Single source of truth for the app version: the repo-root VERSION file
+// (docs/VERSIONING.md). CI release notes and build-metadata read the same
+// file, so the APK version can never drift from the release tag.
+val abVersionName: String = rootProject.file("VERSION").readLines()
+    .first { it.trim().startsWith("AGENT_BROWSER_VERSION=") }
+    .substringAfter('=').trim()
+val abVersionCode: Int = abVersionName.split('.')
+    .map { seg -> seg.filter(Char::isDigit).toInt() }
+    .fold(0) { acc, n -> acc * 1000 + n }  // 1.0.3 -> 1000003
+
 android {
     namespace = "com.agentbrowser.app"
     compileSdk = 34
@@ -14,8 +24,8 @@ android {
         applicationId = "com.agentbrowser.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = abVersionCode
+        versionName = abVersionName
     }
 
     // Release APK split per ABI plus one universal APK, as required by the
