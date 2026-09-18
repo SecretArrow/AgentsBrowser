@@ -1,0 +1,106 @@
+# Chromium autopilot: watches for an online self-hosted runner labeled
+# `chromium-builder` and dispatches the full chromium-build workflow
+# automatically when it is ready — and retries on new commits after failures.
+# No manual dispatch is ever needed once a runner is registered.
+#
+# Guards (all must pass before dispatch):
+#   1. at least one ONLINE runner labeled `chromium-builder`
+#   2. no queued/in-progress chromium-build run
+#   3. current main HEAD not already picked up by an earlier run
+#   4. if the last run failed: no open ci-failure issue for that same commit
+name: chromium-autopilot
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  issues: read
+
+concurrency:
+  group: chromium-autopilot
+  cancel-in-progress: false
+
+jobs:
+  autopilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Evaluate and dispatch when a chromium-builder is ready
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, urllib.request, urllib.error
+
+          tok = os.environ["GH_TOKEN"]
+          repo = os.environ["REPO"]
+
+          def api(path):
+              req = urllib.request.Request(
+                  f"https://api.github.com{path}",
+                  headers={"Authorization": f"token {tok}",
+                           "Accept": "application/vnd.github+json"})
+              with urllib.request.urlopen(req) as r:
+                  return json.load(r)
+
+          def dispatch(path, data):
+              req = urllib.request.Request(
+                  f"https://api.github.com{path}",
+                  data=json.dumps(data).encode(),
+                  headers={"Authorization": f"token {tok}",
+                           "Accept": "application/vnd.github+json"},
+                  method="POST")
+              try:
+                  urllib.request.urlopen(req)
+                  return 200
+              except urllib.error.HTTPError as e:
+                  return e.code
+
+          def step(msg):
+              print(f"::notice::{msg}")
+
+          head = api(f"/repos/{repo}/commits/main")["sha"]
+          print(f"HEAD = {head[:7]}")
+
+          runners = api(f"/repos/{repo}/actions/runners?per_page=100")
+          online = [r for r in runners.get("runners", [])
+                    if r.get("status") == "online"
+                    and any(l["name"] == "chromium-builder"
+                            for l in r.get("labels", []))]
+          if not online:
+              step("No chromium-builder runner online yet.")
+              raise SystemExit(0)
+          step(f"{len(online)} chromium-builder runner(s) online.")
+
+          runs = api(f"/repos/{repo}/actions/workflows/chromium-build.yml/"
+                     f"runs?per_page=10").get("workflow_runs", [])
+          if runs:
+              latest = runs[0]
+              if latest["head_sha"] == head:
+                  step(f"Commit {head[:7]} already picked up "
+                       f"(run {latest['id']}: {latest['status']}/"
+                       f"{latest['conclusion']}).")
+                  raise SystemExit(0)
+              if latest["status"] in ("in_progress", "queued"):
+                  step("A chromium-build run is already active.")
+                  raise SystemExit(0)
+              if latest["conclusion"] == "failure":
+                  short = latest["head_sha"][:7]
+                  issues = api(f"/repos/{repo}/issues"
+                               f"?labels=ci-failure&state=open&per_page=30")
+                  if any(f"chromium-build failed on {short}" in
+                         i.get("title", "") for i in issues):
+                      step(f"Failure for {short} already reported; "
+                           f"waiting for a fix commit.")
+                      raise SystemExit(0)
+
+          code = dispatch(
+              f"/repos/{repo}/actions/workflows/chromium-build.yml/dispatches",
+              {"ref": "main"})
+          step(f"Dispatched chromium-build on main ({head[:7]}), http={code}.")
+          PYEOF

@@ -30,10 +30,29 @@ android {
         }
     }
 
+    // Production signing from AB_KEYSTORE_* (set by release-hosted when
+    // secrets are present); falls back to the debug key so CI stays green.
+    signingConfigs {
+        create("release") {
+            val ksPath = System.getenv("AB_KEYSTORE_PATH")
+            if (ksPath != null && file(ksPath).exists()) {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("AB_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("AB_KEY_ALIAS")
+                keyPassword = System.getenv("AB_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            val ksPath = System.getenv("AB_KEYSTORE_PATH")
+            signingConfig = if (ksPath != null && file(ksPath).exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

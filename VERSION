@@ -1,6 +1,6 @@
 # Agent Browser version record (docs/VERSIONING.md)
 # Bumped for every release; CI stamps the Chromium revision and patch revision.
-AGENT_BROWSER_VERSION=1.0.1
+AGENT_BROWSER_VERSION=1.0.2
 CHROMIUM_BASE=android-15.0.0_r1
 PATCH_SERIES=agent_browser/integration/patches/SERIES
 BUILD_NUMBER=0
