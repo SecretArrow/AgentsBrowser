@@ -1,19 +1,40 @@
-# Full Chromium Android build — runs ONLY on a self-hosted runner with the
-# `chromium-builder` label (docs/RUNNER-SETUP.md). On failure, the auto-fix
-# workflow applies heuristic fixes, pushes them, and this workflow re-runs.
+# Full Chromium Android fork build — the real browser (100–150 MB APKs).
+#
+# Two lanes, picked by the `runner` dispatch input (default: hosted16):
+#   A) self-hosted  → a machine you registered with the `chromium-builder`
+#                     label. Free, unlimited time (docs/RUNNER-SETUP.md).
+#   B) hosted16     → GitHub larger runner `ubuntu-latest-16-cores`
+#                     (16 vCPU / 64 GB RAM / 256 GB SSD). The only GitHub
+#                     hosted machine class that fits a Chromium build.
+#                     Requires billing enabled on the account.
+#
+# A full build takes ~4–6 h on 16 cores (symbol_level=0, no component
+# build). On tag pushes (v*) the resulting APKs are attached to the
+# GitHub release created by release-hosted.
 name: chromium-build
 
 on:
-  # Push trigger is disabled until a self-hosted runner labeled
-  # `chromium-builder` is registered (otherwise runs queue forever).
-  # Re-enable by uncommenting the push block below.
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - "agent_browser/**"
-  #     - "scripts/**"
-  #     - ".github/workflows/chromium-build.yml"
+  push:
+    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "Where to build"
+        required: false
+        default: "hosted16"
+        type: choice
+        options:
+          - hosted16
+          - self-hosted
+      target_cpu:
+        description: "Chromium target_cpu"
+        required: false
+        default: "arm64"
+        type: choice
+        options:
+          - arm64
+          - arm
+          - x64
 
 permissions:
   contents: write
@@ -25,15 +46,38 @@ concurrency:
 
 jobs:
   build:
-    runs-on: [self-hosted, chromium-builder]
-    timeout-minutes: 600
+    # Lane A: your own machine (free). Lane B: paid 16-core larger runner.
+    runs-on: ${{ inputs.runner == 'self-hosted' && 'self-hosted' || 'ubuntu-latest-16-cores' }}
+    timeout-minutes: 360
+    env:
+      TARGET_CPU: ${{ inputs.target_cpu || 'arm64' }}
     steps:
       - uses: actions/checkout@v4
 
+      # Free up disk and add swap — hosted16 has 256 GB SSD but ships with
+      # ~30 GB of preinstalled toolchains we don't need for Chromium.
+      - name: Free disk space + add swap
+        if: inputs.runner != 'self-hosted'
+        run: |
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 4G /mnt/4G.swap
+          sudo chmod 600 /mnt/4G.swap
+          sudo mkswap /mnt/4G.swap
+          sudo swapon /mnt/4G.swap
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/lib/jvm 2>/dev/null || true
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          df -h /
+
       - name: Preflight (disk, RAM, tools)
         run: bash scripts/preflight-checks.sh
+        env:
+          PREFLIGHT_SKIP: ${{ inputs.runner == 'self-hosted' && '' || '1' }}
 
-      - name: Sync Chromium
+      - name: Sync Chromium (fetch + hooks, ~25 GB)
+        timeout-minutes: 90
         run: bash scripts/sync-chromium.sh
         env:
           CHROMIUM_BRANCH: android-15.0.0_r1
@@ -44,27 +88,57 @@ jobs:
       - name: Configure GN
         run: bash scripts/configure-gn.sh
 
-      - name: Build APK/AAB (incremental)
+      - name: Build APK (~4–5 h on 16 cores)
+        timeout-minutes: 330
         run: bash scripts/build-chromium-android.sh
 
-      - name: Upload artifacts
+      - name: Collect APKs
+        id: collect
+        run: |
+          mkdir -p apks
+          find chromium/out/AgentBrowser/apks -name '*.apk' -exec cp {} apks/ \; || true
+          find chromium/out/AgentBrowser -maxdepth 1 -name '*.apk' -exec cp {} apks/ \; || true
+          # Rename to release-friendly names: AgentBrowser-<ver>-<cpu>.apk
+          VER="$(grep AGENT_BROWSER_VERSION VERSION | cut -d= -f2)"
+          for f in apks/*.apk; do
+            [ -e "$f" ] || continue
+            base="$(basename "$f")"
+            case "$base" in
+              *arm64*) cpu="arm64-v8a" ;;
+              *arm*)   cpu="armeabi-v7a" ;;
+              *x64*)   cpu="x86_64" ;;
+              *x86*)   cpu="x86" ;;
+              *)       cpu="unknown" ;;
+            esac
+            [ "$cpu" = "unknown" ] && cpu="$TARGET_CPU"
+            mv "$f" "apks/AgentBrowser-${VER}-${cpu}-chromium.apk"
+          done
+          ls -la apks/
+          echo "count=$(ls apks/*.apk 2>/dev/null | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agent-browser-apks
-          path: |
-            chromium/out/AgentBrowser/apks/*.apk
-            chromium/out/AgentBrowser/apks/*.aab
+          name: agent-browser-chromium-apks
+          path: apks/*.apk
           retention-days: 14
           if-no-files-found: warn
+
+      # On tag pushes, attach the full-fork APKs to the release that
+      # release-hosted already created for the same tag.
+      - name: Attach APKs to release
+        if: startsWith(github.ref, 'refs/tags/') && steps.collect.outputs.count != '0'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apks/*.apk
+          overwrite_files: true
 
       - name: File build failure report
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const log = '';
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
