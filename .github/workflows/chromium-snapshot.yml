@@ -54,6 +54,13 @@ jobs:
             plat="${pair%%:*}"; abi="${pair##*:}"
             pos="$(curl -sf "$BASE/$plat/LAST_CHANGE")" || { echo "::warning::$plat has no LAST_CHANGE; skipping"; continue; }
             [ -n "$pos" ] || continue
+            # Probe the zip before scheduling a runner for it: snapshot
+            # positions are pruned inconsistently and desktop lanes
+            # sometimes publish LAST_CHANGE without artifacts.
+            if ! curl -sfI "$BASE/$plat/$pos/chrome-android.zip" >/dev/null; then
+              echo "::warning::$plat/$pos has no chrome-android.zip; skipping"
+              continue
+            fi
             items="$items{\"platform\":\"$plat\",\"abi\":\"$abi\",\"position\":\"$pos\"},"
           done
           items="${items%,}"
