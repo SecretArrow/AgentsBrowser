@@ -45,6 +45,8 @@ hundreds of GB and running as root makes cleanup painful.
 ## Verifying
 
 ```bash
-# from anywhere: push a commit touching agent_browser/** — chromium-build runs
+# from anywhere: set repo variable CHROMIUM_RUNNER=self-hosted (or dispatch
+# chromium-build with runner=self-hosted) — the build starts when this runner
+# is online. The autopilot also dispatches this lane automatically.
 # on the runner and artifacts appear under the run summary.
 ```

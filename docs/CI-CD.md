@@ -40,13 +40,25 @@ never echoed or committed.
 
 ## Required runner label
 
-`chromium-build` runs on either lane (dispatch input `runner`):
+`chromium-build` picks its lane automatically (default `guard` input):
 
-- **self-hosted** — free, your own machine labeled `chromium-builder`
-  (docs/RUNNER-SETUP.md). Default lane used by the autopilot.
-- **hosted16** — GitHub larger runner `ubuntu-latest-16-cores`
-  (16 vCPU / 64 GB RAM / 256 GB SSD). Requires billing enabled on the
-  account; without it the run stays `pending` until cancelled.
+1. Repo variable `CHROMIUM_RUNNER` decides where the full fork builds:
+   - `self-hosted` → free, your own machine labeled `chromium-builder`
+     (docs/RUNNER-SETUP.md).
+   - `hosted16` → GitHub larger runner `ubuntu-latest-16-cores`
+     (16 vCPU / 64 GB RAM / 256 GB SSD). Requires billing enabled;
+     without it the run stays `pending` until cancelled.
+2. If the variable is unset, the runner job exits with a `::notice::`
+   explaining how to enable it — no zombie `pending` runs.
+3. Dispatch inputs `runner: hosted16|self-hosted` override the variable
+   for a single run.
+
+Set it once (Settings → Secrets and variables → Actions → Variables):
+
+    CHROMIUM_RUNNER = hosted16   # or self-hosted
+
+and every future tag pushes the real ~100–150 MB Chromium APKs to the
+release with zero code changes.
 
 `release` (full-fork signing lane) still requires the self-hosted
 `chromium-builder` runner — see docs/RUNNER-SETUP.md.

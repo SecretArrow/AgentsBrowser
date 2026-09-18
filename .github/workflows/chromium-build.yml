@@ -21,9 +21,10 @@ on:
       runner:
         description: "Where to build"
         required: false
-        default: "hosted16"
+        default: "guard"
         type: choice
         options:
+          - guard
           - hosted16
           - self-hosted
       target_cpu:
@@ -44,10 +45,45 @@ concurrency:
   group: chromium-build-${{ github.ref }}
   cancel-in-progress: false
 
+# Lane is picked by the `runner` input. `guard` (the default) resolves it
+# from the repo variable CHROMIUM_RUNNER ("self-hosted" or "hosted16"):
+#   - set it once after enabling billing or registering your builder, and
+#     every future tag/dispatch builds the full fork with zero code changes.
+# If the lane is unconfigured the runner job exits with a notice instead of
+# queueing a zombie run that would wait forever for a nonexistent runner.
 jobs:
+  runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      lane: ${{ steps.pick.outputs.lane }}
+      cpu: ${{ steps.pick.outputs.cpu }}
+    steps:
+      - id: pick
+        env:
+          CHROMIUM_RUNNER: ${{ vars.CHROMIUM_RUNNER }}
+          IN_RUNNER: ${{ inputs.runner }}
+        run: |
+          lane="${IN_RUNNER:-guard}"
+          if [ "$lane" = "guard" ] || [ -z "$lane" ]; then
+            lane="${CHROMIUM_RUNNER:-none}"
+          fi
+          case "$lane" in
+            self-hosted) echo "lane=self-hosted" >> "$GITHUB_OUTPUT" ;;
+            hosted16)    echo "lane=ubuntu-latest-16-cores" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "::notice::Full Chromium build is armed but not enabled."
+              echo "::notice::Set repo variable CHROMIUM_RUNNER=hosted16 (needs GitHub billing) or self-hosted (see docs/RUNNER-SETUP.md)."
+              echo "lane=none" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          echo "picked lane: $lane"
+
   build:
+    needs: runner
+    if: ${{ needs.runner.outputs.lane != 'none' }}
     # Lane A: your own machine (free). Lane B: paid 16-core larger runner.
-    runs-on: ${{ inputs.runner == 'self-hosted' && 'self-hosted' || 'ubuntu-latest-16-cores' }}
+    runs-on: ${{ needs.runner.outputs.lane }}
     timeout-minutes: 360
     env:
       TARGET_CPU: ${{ inputs.target_cpu || 'arm64' }}
