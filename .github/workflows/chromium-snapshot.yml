@@ -1,0 +1,183 @@
+# Real full Chromium browser APKs via GitHub Actions — no self-hosted
+# runner, no billing. Google's own CI publishes continuously built
+# Chromium Android APKs to the public chromium-browser-snapshots bucket;
+# this workflow fetches them, re-signs with our key, and attaches them
+# to releases. Split per-platform with a matrix so every runner stays
+# light (download + extract + re-sign ≈ 5–10 min each, in parallel).
+name: chromium-snapshot
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Which snapshot platforms to fetch"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - android-arm64
+          - android-arm
+          - desktop-x64
+
+permissions:
+  contents: write
+
+concurrency:
+  group: chromium-snapshot-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ── Resolve: latest snapshot position per platform (light, 1 min) ────
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        env:
+          WANT: ${{ inputs.platforms || 'all' }}
+        run: |
+          BASE="https://commondatastorage.googleapis.com/chromium-browser-snapshots"
+          all='Android_Arm64:arm64-v8a Android:armeabi-v7a AndroidDesktop_x64:x86_64'
+          case "$WANT" in
+            android-arm64) sel="Android_Arm64:arm64-v8a" ;;
+            android-arm)   sel="Android:armeabi-v7a" ;;
+            desktop-x64)   sel="AndroidDesktop_x64:x86_64" ;;
+            *)             sel="$all" ;;
+          esac
+          items=""
+          for pair in $sel; do
+            plat="${pair%%:*}"; abi="${pair##*:}"
+            pos="$(curl -sf "$BASE/$plat/LAST_CHANGE")" || { echo "::warning::$plat has no LAST_CHANGE; skipping"; continue; }
+            [ -n "$pos" ] || continue
+            items="$items{\"platform\":\"$plat\",\"abi\":\"$abi\",\"position\":\"$pos\"},"
+          done
+          items="${items%,}"
+          matrix="{\"include\":[$items]}"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "resolved: $matrix"
+
+  # ── Fetch: one light runner per platform, all in parallel ────────────
+  fetch:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.resolve.outputs.matrix) }}
+    env:
+      BASE: https://commondatastorage.googleapis.com/chromium-browser-snapshots
+      AB_KEYSTORE_BASE64: ${{ secrets.AB_KEYSTORE_BASE64 }}
+      AB_KEYSTORE_PASSWORD: ${{ secrets.AB_KEYSTORE_PASSWORD }}
+      AB_KEY_ALIAS: ${{ secrets.AB_KEY_ALIAS }}
+      AB_KEY_PASSWORD: ${{ secrets.AB_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download snapshot zip (~300–430 MB)
+        run: |
+          curl -fL --retry 3 --retry-delay 5 \
+            -o snap.zip \
+            "$BASE/${{ matrix.platform }}/${{ matrix.position }}/chrome-android.zip"
+          ls -la snap.zip
+
+      - name: Extract browser APK
+        run: |
+          set -e
+          unzip -j -o snap.zip '*/apks/*.apk' -d raw || true
+          ls -la raw/
+          # Prefer the full browser APK; fall back to the largest non-shell one.
+          if [ -f raw/ChromePublic.apk ]; then
+            cp raw/ChromePublic.apk browser.apk
+          else
+            APK=$(ls -S raw/*.apk | grep -v -E 'ContentShell|SystemWebView' | head -1)
+            [ -n "$APK" ] || { echo "no browser APK in snapshot"; exit 1; }
+            cp "$APK" browser.apk
+          fi
+          ls -la browser.apk
+
+      - name: Re-sign (production key if configured, debug otherwise)
+        run: |
+          set -e
+          APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          ZIPALIGN="$(ls "$ANDROID_HOME"/build-tools/*/zipalign | sort -V | tail -1)"
+          if [ -n "$AB_KEYSTORE_BASE64" ]; then
+            echo "$AB_KEYSTORE_BASE64" | base64 -d > ks.keystore
+            KSPASS="$AB_KEYSTORE_PASSWORD"; KALIAS="$AB_KEY_ALIAS"; KPASS="$AB_KEY_PASSWORD"
+            echo "signing with AB_KEYSTORE production key"
+          else
+            keytool -genkeypair -v -keystore ks.keystore -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=Agent Browser Debug,O=AgentBrowser,C=US" >/dev/null
+            KSPASS="android"; KALIAS="androiddebugkey"; KPASS="android"
+            echo "AB_KEYSTORE not set; signing with ephemeral CI key"
+          fi
+          "$ZIPALIGN" -f -p 4 browser.apk aligned.apk
+          "$APKSIGNER" sign --ks ks.keystore --ks-pass "pass:$KSPASS" \
+            --ks-key-alias "$KALIAS" --key-pass "pass:$KPASS" \
+            --out signed.apk aligned.apk
+          "$APKSIGNER" verify signed.apk
+          VER="$(grep AGENT_BROWSER_VERSION VERSION | cut -d= -f2)"
+          OUT="AgentBrowser-Chromium-${VER}-${{ matrix.abi }}-r${{ matrix.position }}.apk"
+          mv signed.apk "$OUT"
+          echo "apk=$OUT" >> "$GITHUB_ENV"
+          ls -la "$OUT"
+
+      - name: Provenance + checksums
+        run: |
+          {
+            echo "Source: Google Chromium continuous build (public snapshots bucket)"
+            echo "Platform: ${{ matrix.platform }}  ABI: ${{ matrix.abi }}"
+            echo "Chromium position: ${{ matrix.position }}"
+            curl -s "$BASE/${{ matrix.platform }}/${{ matrix.position }}/REVISIONS" || true
+            echo
+            sha256sum AgentBrowser-Chromium-*.apk
+          } > provenance-${{ matrix.abi }}.txt
+          cat provenance-${{ matrix.abi }}.txt
+
+      - name: Upload per-platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-snapshot-${{ matrix.abi }}
+          path: |
+            *.apk
+            provenance-*.txt
+          retention-days: 30
+          if-no-files-found: error
+
+  # ── Package: attach real Chromium APKs to the release ────────────────
+  release:
+    needs: [resolve, fetch]
+    if: ${{ !cancelled() && needs.fetch.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: chromium-snapshot-*
+          merge-multiple: true
+          path: apks
+      - name: List collected APKs
+        run: ls -la apks/
+      - name: Attach Chromium APKs to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apks/*.apk
+            apks/provenance-*.txt
+          overwrite_files: true
+      - name: Dispatch-only summary
+        if: github.ref_type != 'tag'
+        run: |
+          {
+            echo "## Real Chromium APKs (fetched + re-signed)"
+            echo ""
+            echo "Dispatch runs do not attach to a release — grab the artifacts above."
+            echo ""
+            sha256sum apks/*.apk || true
+          } >> "$GITHUB_STEP_SUMMARY"
